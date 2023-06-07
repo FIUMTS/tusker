@@ -12,7 +12,7 @@ from django.urls import reverse
 
 endpoint = [
 		"cas/oauth2.0/authorize",
-		"cas/oauth2.0/accessToken",		
+		"cas/oauth2.0/accessToken",
 		"cas/oauth2.0/profile",
 	]
 
@@ -46,8 +46,8 @@ class tokenView(View):
 		r = requests.get("%s/%s?access_token=%s"%(settings.OAUTH_URL, endpoint[2], creds["access_token"]))	
 
 		if r.status_code != 200 and r.status_code != 302:
- 			return HttpResponseBadRequest("Invalid second request")
-
+			return HttpResponseBadRequest("Invalid second request")
+        
 		userdata = json.loads(r.text)
 
 		expire = datetime.fromtimestamp(userdata["attributes"]["authenticationDate"])
