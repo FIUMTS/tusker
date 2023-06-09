@@ -182,7 +182,7 @@ class JwksView(View):
 
 class dashboardView(View):
 	def get(self,request):
-		admin = False
+		isadmin = False
 		p = request.GET.get('p',1)
 
 		if isAdmin(request.user):
