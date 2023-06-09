@@ -17,19 +17,19 @@ from django.contrib.auth.decorators import login_required
 from django.conf.urls import url, include
 from django.contrib import admin
 from django.http import HttpResponse
-from lti.views import LaunchView, ltilogin, JwksView, TestView, dashboardView
+from lti.views import LaunchView, ltilogin, JwksView, TestView, dashboardView,courseView
 import os
 import tusker.settings
 from django.conf import settings
 from django.urls import path
 urlpatterns = [
-    url(r'^$', lambda req:HttpResponse(os.path.join(settings.BASE_DIR, 'configs', 'game.json'))),
-    url(r'^admin/', admin.site.urls),
-	url(r'^ltilogin/$', ltilogin),
-	url(r'^launch/$', LaunchView.as_view()),
-	url(r'^jwks/$', JwksView.as_view()),
-	url(r'^test/$', TestView.as_view()),
-	url(r'^dashboard/$', login_required(dashboardView.as_view()), name="dashboard"),
+    path('admin/', admin.site.urls),
+	path('ltilogin/', ltilogin),
+	path('launch/', LaunchView.as_view()),
+	path('jwks/', JwksView.as_view()),
+	path('test/', TestView.as_view()),
+	path('dashboard/<int:cid>/', login_required(courseView.as_view())),
+	path('dashboard/', login_required(dashboardView.as_view()), name="dashboard"),
 	path("auth/", include("myauth.urls")),
 
 ]

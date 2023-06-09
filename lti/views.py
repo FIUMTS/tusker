@@ -10,11 +10,16 @@ from pylti1p3.tool_config import ToolConfJsonFile
 from pylti1p3.registration import Registration
 import os
 import logging
+import random
+import string
 from django.contrib.auth.models import User
 from django.contrib.auth import  login
 from django.contrib.auth.models import Group
 from lti.models import courseUsers, course, ltiapp
 from django.core.exceptions import ObjectDoesNotExist
+from lti.forms import appForm
+from django.core.paginator import Paginator
+
 logger = logging.getLogger("django")
 
 # Create your views here.
@@ -61,6 +66,16 @@ def isAdmin(user):
 	
 	return False
 
+def hasAccess(user, course):
+	userdata = courseUsers.objects.filter(courseid=course, userid=user)	
+	
+	if not isAdmin(user) and userData.count() == 0:
+            return False
+
+	return True
+
+
+
 
 def ltilogin(request):
 	tool_conf = get_tool_conf()
@@ -69,6 +84,7 @@ def ltilogin(request):
 	oidc_login = DjangoOIDCLogin(request, tool_conf, launch_data_storage=launch_data_storage)
 	target_link_uri = get_launch_url(request)
 	logger.debug("log in view")
+
 	return oidc_login\
 		.enable_check_cookies()\
 		.redirect(target_link_uri)
@@ -122,17 +138,12 @@ class LaunchView(View):
 				user.save()
 			tempcourse = course.objects.filter(coursecontext = courseid)
 
-			if len(tempcourse) == 0:
+			if tempcourse.count() == 0:
 				mycourse = course(coursecontext = courseid,coursename = coursename)
 				mycourse.save()
 			else:
 				mycourse = tempcourse[0]
 
-			try:
-				app = ltiapp.objects.get(courseid=mycourse)
-			except:
-				app = []
-			 
 
 			if user.groups.filter(name="instructor").exists():
 				role = "instructor"
@@ -148,11 +159,16 @@ class LaunchView(View):
 				coursemodel.save()
 
 			login(request, user)
-			
-			if len(app) == 0:
+
+			try:
+				app = ltiapp.objects.get(courseid=mycourse)
+			except:
 				return render(request, "landing.html")
 
-			return HttpResponse("Hello %s"%(message_launch_data.get('given_name', '')))
+			if app.url == None:
+				return render(request, "landing.html")
+
+			return render(request, "frame.html", {"url": app.url})
 		else:
 			return HttpResponse("Hi, no nrps enabled.")
 
@@ -167,6 +183,7 @@ class JwksView(View):
 class dashboardView(View):
 	def get(self,request):
 		admin = False
+		p = request.GET.get('p',1)
 
 		if isAdmin(request.user):
 			courses = course.objects.all()
@@ -175,8 +192,73 @@ class dashboardView(View):
 		else:
 			courses = courseUsers.objects.filter(userid=request.user, role = "instructor")
 
-		return render(request, "dashboard.html",{"courses": courses, "admin": isadmin})
+		page = Paginator(courses, 10)
+		pagecourses = page.get_page(p)
 
+		return render(request, "dashboard.html",{"courses": pagecourses, "admin": isadmin})
+
+class courseView(View):
+	def get(self,request,cid):
+		key = ''
+		url = ''
+
+		try:
+			mycourse = course.objects.get(pk=cid)
+		except course.DoesNotExist:
+			return HttpResponseNotFound()
+
+		if not hasAccess(request.user, mycourse):
+			return HttpResponseNotFound()
+		
+		try:
+			ltiinfo = ltiapp.objects.get(courseid=mycourse)
+			key = ltiinfo.apikey
+			
+			if ltiinfo.url is None:
+				url = ''
+			else:
+				url = ltiinfo.url
+
+		except ltiapp.DoesNotExist:
+			while 1:
+				key = ''.join(random.choices(string.ascii_lowercase, k=20))
+				if ltiapp.objects.filter(apikey=key).count() == 0:
+					break
+			
+			ltiinfo = ltiapp(courseid=mycourse,apikey=key)
+			ltiinfo.save()
+		
+		f = appForm(initial={"apikey": key,"url": url})
+
+		return render(request,"course.html", {"f": f, "course": mycourse})				
+
+	def post(self, request,cid):
+		msg = ''
+	
+		try:
+			mycourse = course.objects.get(pk=cid)
+		except course.DoesNotExist:
+			return HttpResponseNotFound()
+
+		if not hasAccess(request.user, mycourse):
+			return HttpResponseNotFound()
+
+		try:
+			app = ltiapp.objects.get(courseid=mycourse)
+		except ltiapp.DoesNotExist:
+			return  HttpResponseNotFound()
+
+		f = appForm(request.POST, initial={"apikey": app.apikey})
+
+		if f.is_valid():
+			app.url = f.cleaned_data["url"]
+			app.save()
+			msg = "Saved!"
+		else:
+			msg = "Please check your input"
+
+		return render(request,"course.html", {"f":f, "message": msg, "course": mycourse})
+	
 
 class TestView(View):
 	def get(self,request):

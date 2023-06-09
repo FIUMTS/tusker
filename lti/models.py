@@ -23,3 +23,6 @@ class ltiapp(models.Model):
 	url = models.URLField(null=True, blank=True)
 	apikey = models.CharField(max_length=30, null=True, blank=True)
 	courseid = models.ForeignKey(course, on_delete=models.CASCADE)
+
+	def __str__(self):
+		return self.courseid.coursename + " " + self.courseid.coursecontext

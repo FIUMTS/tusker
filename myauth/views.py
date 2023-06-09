@@ -7,15 +7,27 @@ import json
 from datetime import datetime, timedelta
 from django.contrib.auth.models import User
 from lti.models import course, courseUsers
-from django.contrib.auth import login
+from django.contrib.auth import login, logout
 from django.urls import reverse
+from requests.auth import HTTPBasicAuth
+
 
 endpoint = [
 		"cas/oauth2.0/authorize",
 		"cas/oauth2.0/accessToken",		
 		"cas/oauth2.0/profile",
+		"cas/oauth2.0/revoke",
 	]
-
+# https://apereo.github.io/cas/6.6.x/authentication/OAuth-Authentication.html useful cas info
+class logoutView(View):
+	'''
+	For this to work, we need to save the access token from log in to the db. We could save to
+	the session, but we are not using secure cookies because of the iframe. Not top of list for now,
+	come back to this. 
+	'''
+	def get(self,request):
+		logout(request)
+		return redirect(reverse("dashboard"))	
 
 # Create your views here.
 class authorizeView(View):
@@ -71,6 +83,7 @@ class tokenView(View):
 
 		request.session['email'] = email
 		request.session['name'] = name
+		
 		return redirect(reverse("dashboard"))
-		#return render(request,"dashboard.html", {"courses": []})
+
 
