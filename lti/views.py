@@ -45,7 +45,6 @@ def get_launch_url(request):
         raise Exception('Missing "target_link_uri" param')
     return target_link_uri
 
-
 def get_tool_conf():
     tool_conf = ToolConfJsonFile(os.path.join(settings.BASE_DIR, 'config', 'lti.json'))
 
@@ -61,25 +60,20 @@ def get_launch_url(request):
 def isAdmin(user):
 	if user.is_superuser:
 		return True
-	if user.groups.filter(name="admin").exists():
-		return True
-	
+	if user.groups.filter(name = "admin").exists():
+		return True	
 	return False
 
 def hasAccess(user, course):
 	userdata = courseUsers.objects.filter(courseid=course, userid=user)	
 	
-	if not isAdmin(user) and userData.count() == 0:
+	if not isAdmin(user) and userdata.count() == 0:
             return False
-
 	return True
-
-
-
 
 def ltilogin(request):
 	tool_conf = get_tool_conf()
-	launch_data_storage = DjangoCacheDataStorage()
+	launch_data_storage = DjangoCacheDataStorage(cache_name='default')
 
 	oidc_login = DjangoOIDCLogin(request, tool_conf, launch_data_storage=launch_data_storage)
 	target_link_uri = get_launch_url(request)
@@ -94,7 +88,6 @@ def getPermissions(lmsroles):
 	admingroup, created = Group.objects.get_or_create(name='admin')
 	teachergroup, created = Group.objects.get_or_create(name='instructor')
 
-
 	for role in lmsroles:
 		if "http://purl.imsglobal.org/vocab/lis/v2/institution/person#Administrator" in role:
 			r.append(admingroup)
@@ -103,13 +96,18 @@ def getPermissions(lmsroles):
 
 	return r
 
+
 class LaunchView(View):
-	def post(self,request):
+
+	def post(self, request):
 		tool_conf = get_tool_conf()
-		launch_data_storage = DjangoCacheDataStorage()
-		message_launch = ExtendedDjangoMessageLaunch(request, tool_conf, launch_data_storage=launch_data_storage)
+		launch_data_storage = DjangoCacheDataStorage(cache_name='default')
+		message_launch = ExtendedDjangoMessageLaunch(request, tool_conf,
+													launch_data_storage = launch_data_storage)
 		message_launch_data = message_launch.get_launch_data()
 		role = ""
+		launchid = message_launch.get_launch_id()
+		request.session["launch"] = launchid
 
 		logger.debug("log in view ")
 		logger.debug(message_launch_data)
@@ -130,7 +128,7 @@ class LaunchView(View):
 				user.save()
 			except User.DoesNotExist:
 				logger.debug("Creating User %s"%(email))
-				user = User.objects.create_user(email,email,"some#random#1")
+				user = User.objects.create_user(email, email, "some#random#1")
 				user.first_name = fname
 				user.last_name = lname
 				user.save()
@@ -139,29 +137,30 @@ class LaunchView(View):
 			tempcourse = course.objects.filter(coursecontext = courseid)
 
 			if tempcourse.count() == 0:
-				mycourse = course(coursecontext = courseid,coursename = coursename)
+				mycourse = course(coursecontext = courseid, coursename = coursename)
 				mycourse.save()
 			else:
 				mycourse = tempcourse[0]
 
 
-			if user.groups.filter(name="instructor").exists():
+			if user.groups.filter(name = "instructor").exists():
 				role = "instructor"
 			else:
 				role = "user"
  
 			try:
-				coursemodel = courseUsers.objects.get(userid=user, 
-				courseid=mycourse, role=role)
+				coursemodel = courseUsers.objects.get(userid = user, 
+													courseid = mycourse,
+													role = role)
 			except:
-				coursemodel = courseUsers(userid=user, courseid=mycourse,
-				role=role)
+				coursemodel = courseUsers(userid = user, courseid = mycourse,
+				role = role)
 				coursemodel.save()
 
 			login(request, user)
 
 			try:
-				app = ltiapp.objects.get(courseid=mycourse)
+				app = ltiapp.objects.get(courseid = mycourse)
 			except:
 				return render(request, "landing.html")
 
@@ -172,16 +171,17 @@ class LaunchView(View):
 		else:
 			return HttpResponse("Hi, no nrps enabled.")
 
+
 class JwksView(View):
-	def get(self,request):
+
+	def get(self, request):
 		tool_conf = get_tool_conf()
 		return JsonResponse(tool_conf.get_jwks(), safe=False)
 
 
-
-
 class dashboardView(View):
-	def get(self,request):
+
+	def get(self, request):
 		isadmin = False
 		p = request.GET.get('p',1)
 
@@ -197,8 +197,25 @@ class dashboardView(View):
 
 		return render(request, "dashboard.html",{"courses": pagecourses, "admin": isadmin})
 
+	def post(self, request):
+		isadmin = False
+
+		if isAdmin(request.user):
+			isadmin = True
+			courses = course.objects.filter(coursename__contains = request.POST["sbox"])
+		else:
+			courses = courseUsers.objects.filter(userid = request.user,
+												role = "instructor",
+												courseid__coursename__contains = request.POST["sbox"])
+		page = Paginator(courses, 10)
+		pagecourses = page.get_page(1)
+
+		return render(request, "dashboard.html",{"courses": pagecourses, "admin": isadmin})
+
+
 class courseView(View):
-	def get(self,request,cid):
+
+	def get(self, request, cid):
 		key = ''
 		url = ''
 
@@ -232,7 +249,7 @@ class courseView(View):
 
 		return render(request,"course.html", {"f": f, "course": mycourse})				
 
-	def post(self, request,cid):
+	def post(self, request, cid):
 		msg = ''
 	
 		try:
@@ -261,6 +278,10 @@ class courseView(View):
 	
 
 class TestView(View):
-	def get(self,request):
+
+	def get(self, request):
 		logger.debug("TEST")
-		return HttpResponse("hi")
+		tool_conf = get_tool_conf()
+		launch_data_storage = DjangoCacheDataStorage(cache_name='default')
+		msg = ExtendedDjangoMessageLaunch.from_cache(request.session["launch"], request, tool_conf, launch_data_storage=launch_data_storage)
+		return HttpResponse(msg.has_ags())
