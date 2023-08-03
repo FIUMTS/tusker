@@ -17,7 +17,8 @@ from django.contrib.auth.decorators import login_required
 from django.conf.urls import url, include
 from django.contrib import admin
 from django.http import HttpResponse
-from lti.views import LaunchView, ltilogin, JwksView, TestView, dashboardView,courseView
+from lti.views import LaunchView, ltilogin, JwksView, FirstNameView, dashboardView,\
+courseView, FullNameView, SUBView
 import os
 import tusker.settings
 from django.conf import settings
@@ -27,7 +28,9 @@ urlpatterns = [
 	path('ltilogin/', ltilogin),
 	path('launch/', LaunchView.as_view()),
 	path('jwks/', JwksView.as_view()),
-	path('test/', TestView.as_view()),
+	path('name/', FirstNameView.as_view()),
+	path('fullname/', FullNameView.as_view()),
+	path('getsub/', SUBView.as_view()),
 	path('dashboard/<int:cid>/', login_required(courseView.as_view())),
 	path('dashboard/', login_required(dashboardView.as_view()), name="dashboard"),
 	path("auth/", include("myauth.urls")),

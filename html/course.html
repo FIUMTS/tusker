@@ -148,7 +148,8 @@
                             <div class="table-responsive">
                                 <div id="dataTable_wrapper" class="dataTables_wrapper dt-bootstrap4"><div class="row">
 									<form method="POST">
-										{{ f }}
+										{% csrf_token %}
+										{{ f.as_p }}
 									<input type="submit" value="Update" class="btn btn-primary btn-icon-split btn-sm text-white-50" style="padding: 4px" />
 									</form>
 								</div></div>

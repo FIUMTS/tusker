@@ -20,9 +20,9 @@ class courseUsers(models.Model):
 		verbose_name_plural = "Course Users"
 
 class ltiapp(models.Model):
-	url = models.URLField(null=True, blank=True)
-	apikey = models.CharField(max_length=30, null=True, blank=True)
 	courseid = models.ForeignKey(course, on_delete=models.CASCADE)
+	header = models.TextField()
+	body = models.TextField()
 
 	def __str__(self):
 		return self.courseid.coursename + " " + self.courseid.coursecontext

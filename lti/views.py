@@ -3,6 +3,8 @@ from django.conf import settings
 from django.views import View
 from django.http import HttpResponse, HttpResponseRedirect, JsonResponse, HttpResponseNotFound
 from pylti1p3.contrib.django import DjangoOIDCLogin, DjangoMessageLaunch, DjangoCacheDataStorage
+from django.views.decorators.csrf import csrf_protect
+from django.utils.decorators import method_decorator
 from pylti1p3.deep_link_resource import DeepLinkResource
 from pylti1p3.grade import Grade
 from pylti1p3.lineitem import LineItem
@@ -19,7 +21,7 @@ from lti.models import courseUsers, course, ltiapp
 from django.core.exceptions import ObjectDoesNotExist
 from lti.forms import appForm
 from django.core.paginator import Paginator
-
+import json
 logger = logging.getLogger("django")
 
 # Create your views here.
@@ -164,10 +166,10 @@ class LaunchView(View):
 			except:
 				return render(request, "landing.html")
 
-			if app.url == None:
+			if len(app.body) == 0 and len(app.header) == 0:
 				return render(request, "landing.html")
 
-			return render(request, "frame.html", {"url": app.url})
+			return render(request, "frame.html", {"body": app.body, "head": app.header})
 		else:
 			return HttpResponse("Hi, no nrps enabled.")
 
@@ -181,6 +183,8 @@ class JwksView(View):
 
 class dashboardView(View):
 
+
+	@method_decorator(csrf_protect)
 	def get(self, request):
 		isadmin = False
 		p = request.GET.get('p',1)
@@ -197,12 +201,13 @@ class dashboardView(View):
 
 		return render(request, "dashboard.html",{"courses": pagecourses, "admin": isadmin})
 
+	@method_decorator(csrf_protect)
 	def post(self, request):
 		isadmin = False
 
 		if isAdmin(request.user):
 			isadmin = True
-			courses = course.objects.filter(coursename__contains = request.POST["sbox"])
+			courses = course.objects.filter(coursename__icontains = request.POST["sbox"])
 		else:
 			courses = courseUsers.objects.filter(userid = request.user,
 												role = "instructor",
@@ -214,7 +219,9 @@ class dashboardView(View):
 
 
 class courseView(View):
+	
 
+	@method_decorator(csrf_protect)
 	def get(self, request, cid):
 		key = ''
 		url = ''
@@ -229,26 +236,20 @@ class courseView(View):
 		
 		try:
 			ltiinfo = ltiapp.objects.get(courseid=mycourse)
-			key = ltiinfo.apikey
-			
-			if ltiinfo.url is None:
-				url = ''
-			else:
-				url = ltiinfo.url
+			body = ltiinfo.body
+			header = ltiinfo.header
 
 		except ltiapp.DoesNotExist:
-			while 1:
-				key = ''.join(random.choices(string.ascii_lowercase, k=20))
-				if ltiapp.objects.filter(apikey=key).count() == 0:
-					break
-			
-			ltiinfo = ltiapp(courseid=mycourse,apikey=key)
+			body = ''
+			header = ''
+			ltiinfo = ltiapp(courseid=mycourse,body=body,header=header)
 			ltiinfo.save()
 		
-		f = appForm(initial={"apikey": key,"url": url})
+		f = appForm(initial={"body": body,"header": header})
 
 		return render(request,"course.html", {"f": f, "course": mycourse})				
 
+	@method_decorator(csrf_protect)
 	def post(self, request, cid):
 		msg = ''
 	
@@ -265,10 +266,11 @@ class courseView(View):
 		except ltiapp.DoesNotExist:
 			return  HttpResponseNotFound()
 
-		f = appForm(request.POST, initial={"apikey": app.apikey})
+		f = appForm(request.POST, initial={"body": app.body, "header": app.header})
 
 		if f.is_valid():
-			app.url = f.cleaned_data["url"]
+			app.body = f.cleaned_data["body"]
+			app.header = f.cleaned_data["header"]
 			app.save()
 			msg = "Saved!"
 		else:
@@ -277,11 +279,39 @@ class courseView(View):
 		return render(request,"course.html", {"f":f, "message": msg, "course": mycourse})
 	
 
-class TestView(View):
+class FirstNameView(View):
 
 	def get(self, request):
-		logger.debug("TEST")
+		logger.debug("First name")
 		tool_conf = get_tool_conf()
 		launch_data_storage = DjangoCacheDataStorage(cache_name='default')
-		msg = ExtendedDjangoMessageLaunch.from_cache(request.session["launch"], request, tool_conf, launch_data_storage=launch_data_storage)
-		return HttpResponse(msg.has_ags())
+		msg = ExtendedDjangoMessageLaunch.from_cache(request.session["launch"],\
+			request, tool_conf, launch_data_storage=launch_data_storage)
+		data = msg.get_launch_data()
+		return HttpResponse(json.dumps({"name": data.get('given_name', '')}))
+
+class FullNameView(View):
+
+    def get(self, request):
+        logger.debug("First name")
+        tool_conf = get_tool_conf()
+        launch_data_storage = DjangoCacheDataStorage(cache_name='default')
+        msg = ExtendedDjangoMessageLaunch.from_cache(request.session["launch"],\
+            request, tool_conf, launch_data_storage=launch_data_storage)
+        data = msg.get_launch_data()
+        return HttpResponse(json.dumps({"name": data.get('given_name', '') \
+							+ " " + data.get('family_name', '')}))
+
+
+class SUBView(View):
+
+
+    def get(self, request):
+        tool_conf = get_tool_conf()
+        launch_data_storage = DjangoCacheDataStorage(cache_name='default')
+        msg = ExtendedDjangoMessageLaunch.from_cache(request.session["launch"],\
+            request, tool_conf, launch_data_storage=launch_data_storage)
+        data = msg.get_launch_data()
+        return HttpResponse(json.dumps({"sub": data.get('sub', '') }))
+
+

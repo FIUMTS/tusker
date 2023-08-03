@@ -1,0 +1,35 @@
+<html>
+<body>
+
+
+<iframe id="tuskerLTI" src="{{url}}" style="width: 100%; height: 90%"> </iframe>
+
+<script>
+const channel = new MessageChannel();
+const iframe = document.getElementById("tuskerLTI");
+
+function lti()
+{
+
+	alert("event");
+	var xhttp = new XMLHttpRequest();
+	xhttp.onreadystatechange = function() {
+		if (this.readyState == 4 && this.status == 200) {
+ 			// Typical action to be performed when the document is ready:
+ 			alert(xhttp.responseText);
+		}
+	};
+	xhttp.open("GET", "https://mtsupload.fiu.edu/lti/test/", true);
+	xhttp.send();
+}
+
+
+function onLoad() {
+	iframe.contentWindow.postMessage("hello", "*",[channel.port2]);
+}
+iframe.addEventListener("load", onLoad);
+window.addEventListener("message", lti); 
+
+</script>
+</body>
+</html>
