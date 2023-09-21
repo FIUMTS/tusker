@@ -1,0 +1,4 @@
+django==3.2.18
+PyLTI1p3==2.0.0
+requests==2.27.1
+
